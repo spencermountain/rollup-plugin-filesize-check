@@ -1,4 +1,14 @@
-# rollup-plugin-filesize-check
+<div align="center">
+  <div><b>rollup-plugin-filesize-check</b></div>
+  <div>
+    <a href="https://npmjs.org/package/rollup-plugin-filesize-check">
+    <img src="https://img.shields.io/npm/v/rollup-plugin-filesize-check.svg?style=flat-square" />
+  </a>
+  <a href="https://bundlephobia.com/result?p=rollup-plugin-filesize-check">
+    <img src="https://badge-size.herokuapp.com/spencermountain/rollup-plugin-filesize-check/index.js" />
+  </a>
+  </div>
+</div>
 
 a small [rollup](https://rollupjs.org) plugin to ensure your build is approx the expected filesize.
 
@@ -9,14 +19,16 @@ a small [rollup](https://rollupjs.org) plugin to ensure your build is approx the
 then in rollup config:
 
 ```js
+import sizeCheck from 'rollup-plugin-filesize-check'
+
 export default [
   {
     input: 'src/index.js',
     output: [{ file: 'builds/out.js', format: 'umd' }],
     plugins: [
       sizeCheck({
-        expect: 95, //(sizes in kb)
-        warn: 5
+        expect: 95, // sizes in kb
+        warn: 5 // acceptable diff (+/-)
       })
     ]
   }
