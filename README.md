@@ -2,7 +2,7 @@
 
 a small [rollup](https://rollupjs.org) plugin to ensure your build is approx the expected filesize.
 
-![image](https://user-images.githubusercontent.com/399657/72990037-72a8cd80-3dbd-11ea-9c27-c33b98c8abb3.png)
+![image](https://user-images.githubusercontent.com/399657/72990325-f6fb5080-3dbd-11ea-9d90-5e2882b80ca8.png)
 
 `npm i rollup-plugin-filesize-check --save-dev`
 
@@ -13,7 +13,12 @@ export default [
   {
     input: 'src/index.js',
     output: [{ file: 'builds/out.js', format: 'umd' }],
-    plugins: [sizeCheck({ expect: 95, warn: 5 })] // (sizes in kb)
+    plugins: [
+      sizeCheck({
+        expect: 95, //(sizes in kb)
+        warn: 5
+      })
+    ]
   }
 ]
 ```
@@ -22,9 +27,9 @@ looks best with `rollup -c --silent` flag
 
 ## Options
 
-- **expect** (optional): the size, in kilobytes, you expect the builds to be
+- **expect <number>** (optional): the size, in kilobytes, you expect the builds to be
 
-* **warn** (optional): a difference (+/-), in kilobytes, that like to be warned of (with red text)
+* **warn <number>** (optional): a difference (+/-), in kilobytes, that like to be warned of (with red text)
 
 ## See also
 
