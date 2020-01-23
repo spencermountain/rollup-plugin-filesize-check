@@ -1,0 +1,10 @@
+{
+  "env": {
+    "node": true,
+    "browser": true
+  },
+  "globals": {},
+  "parserOptions": {
+    "ecmaVersion": 6
+  }
+}
