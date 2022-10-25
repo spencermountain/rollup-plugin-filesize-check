@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-filesize-check",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "ensure rollup builds are the expected size",
   "main": "index.js",
   "scripts": {
@@ -21,12 +21,12 @@
   },
   "homepage": "https://github.com/spencermountain/rollup-plugin-filesize-check#readme",
   "peerDependencies": {
-    "rollup": "^1.0.0"
+    "rollup": "^3.2.3"
   },
   "devDependencies": {
-    "rollup": "^1.29.1",
-    "tap-dancer": "^0.2.0",
-    "tape": "^4.13.0",
+    "rollup": "3.2.3",
+    "tap-dancer": "0.3.4",
+    "tape": "5.6.1",
     "tape-async": "^2.3.0"
   }
 }

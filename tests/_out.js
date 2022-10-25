@@ -1,7 +1,7 @@
 (function (factory) {
   typeof define === 'function' && define.amd ? define(factory) :
   factory();
-}((function () { 'use strict';
+})((function () { 'use strict';
 
   // This function isn't used anywhere, so
   // Rollup excludes it from the bundle...
@@ -76,4 +76,4 @@ I don't care 'bout that `;
   };
   module.exports = doMath;
 
-})));
+}));
