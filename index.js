@@ -2,18 +2,18 @@
 const reset = '\x1b[0m'
 
 const color = {
-  red: function(str) {
+  red: function (str) {
     return '\x1b[31m' + str + reset
   },
-  green: function(str) {
+  green: function (str) {
     return '\x1b[32m' + str + reset
   },
-  yellow: function(str) {
+  yellow: function (str) {
     return '\x1b[33m' + str + reset
   }
 }
 
-const padEnd = function(str, width = 9) {
+const padEnd = function (str, width = 9) {
   str = str.toString()
   while (str.length < width) {
     str += ' '
@@ -21,7 +21,7 @@ const padEnd = function(str, width = 9) {
   return str
 }
 
-const sizeCheck = function(options) {
+const sizeCheck = function (options) {
   options = options || {}
   return {
     name: 'filesize',
@@ -43,14 +43,14 @@ const sizeCheck = function(options) {
           }
           //compare to expected size
           let diff = options.expect - size
-          let diffStr = diff > 0 ? '+' + diff : diff
+          let diffStr = diff > 0 ? diff : '-' + diff
           log += ` (${diffStr} kb)`
           if (!options.warn) {
             console.log(color.yellow(log))
             return
           }
           //is it bad
-          if (Math.abs(diff) > options.warn) {
+          if (Math.abs(diff) < options.warn) {
             console.warn(color.red(log))
             return
           }
@@ -60,4 +60,4 @@ const sizeCheck = function(options) {
     }
   }
 }
-module.exports = sizeCheck
+export default sizeCheck
