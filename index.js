@@ -43,14 +43,14 @@ const sizeCheck = function (options) {
           }
           //compare to expected size
           let diff = options.expect - size
-          let diffStr = diff > 0 ? diff : '-' + diff
+          let diffStr = diff > 0 ? diff : diff
           log += ` (${diffStr} kb)`
           if (!options.warn) {
             console.log(color.yellow(log))
             return
           }
           //is it bad
-          if (Math.abs(diff) < options.warn) {
+          if (Math.abs(diff) > options.warn) {
             console.warn(color.red(log))
             return
           }

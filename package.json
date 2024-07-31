@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-filesize-check",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ensure rollup builds are the expected size",
   "main": "index.js",
   "type": "module",
