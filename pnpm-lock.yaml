@@ -15,8 +15,8 @@ importers:
         specifier: 4.63.4
         version: 4.63.4
       tap-dancer:
-        specifier: 0.4.1
-        version: 0.4.1
+        specifier: 0.4.2
+        version: 0.4.2
       tape:
         specifier: 5.10.2
         version: 5.10.2
@@ -896,9 +896,9 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
-  tap-dancer@0.4.1:
-    resolution: {integrity: sha512-hM1MNzebpyXqI8WKD4+TTYSLG4+hAr+xUmmQxGTpkDtkhQJM5Wn0PdEfATmOCCiC9O9BXbBud8d1P8j308NxnA==}
-    engines: {node: '>=20'}
+  tap-dancer@0.4.2:
+    resolution: {integrity: sha512-fc+aXvCColauoRlS1QMJtQqCHWFw+0Ck2KVCbvycDs6DdWHa8V2V0yhsfBp4TyrJsfUksDAGfw1/Ukf+rEyjQA==}
+    engines: {node: '>=18'}
     hasBin: true
 
   tap-parser@18.3.4:
@@ -2044,7 +2044,7 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  tap-dancer@0.4.1:
+  tap-dancer@0.4.2:
     dependencies:
       tap-parser: 18.3.4
 
