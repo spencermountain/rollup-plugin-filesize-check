@@ -79,6 +79,13 @@ output directory. `*.js` matches the root; `**/*.js` also matches nested paths.
 Hidden files are included when they match. Use `exclude` for exclusions instead
 of a leading `!` in a pattern.
 
+The built-in matcher is case-sensitive and supports `*` (zero or more characters
+within a filename), `?` (one character), and `**` (any depth of directories).
+Use `/` as the path separator; `**` must occupy a whole path segment.
+Brace expansion (`*.{js,css}`), character classes (`[ab].js`), extglobs, and
+backslash escapes are unsupported and rejected. Use arrays such as
+`['**/*.js', '**/*.css']` for alternatives. Matching requires no runtime dependencies.
+
 Global filters apply first. The first matching budget applies to each selected
 file, without inheriting top-level limits. A budget's `exclude` only prevents
 that rule from matching; later rules can still apply. Unmatched files use the
@@ -173,6 +180,11 @@ export default {
   plugins: [sizeCheck(options)]
 }
 ```
+
+## Development
+
+Run `npm run check` for the tests and lint checks. Type checks are optional:
+install TypeScript manually, then run `npm run test:types`.
 
 ## See also
 

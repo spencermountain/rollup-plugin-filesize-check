@@ -1,10 +1,8 @@
 /* eslint-disable no-console */
-import picomatch from 'picomatch'
-const statusColors = { WARN: 33, FAIL: 31 }
+const statusColors = { WARN: 33 }
 const statusLabels = {
   SIZE: 'Filesize:',
-  WARN: 'Filesize warning:',
-  FAIL: 'Filesize error:'
+  WARN: 'Filesize warning:'
 }
 
 const useColor = (option, stream) => {
@@ -25,10 +23,9 @@ const formatDifference = bytes => {
 }
 
 const formatRow = (row, widths, colored, showLabel = true) => {
-  const label = paint(statusLabels[row.status], statusColors[row.status], colored)
   const name = paint(row.fileName.padEnd(widths.name), 36, colored)
   const size = paint(row.size.padStart(widths.size), 34, colored)
-  const prefix = showLabel ? `  ${label}  ` : '  '
+  const prefix = showLabel ? `  ${paint(statusLabels[row.status], statusColors[row.status], colored)}  ` : '  '
   let message = `${prefix}${name} = ${size}`
   if (row.diff !== undefined) {
     if (row.status === 'WARN' || row.status === 'FAIL') {
@@ -69,8 +66,26 @@ const compilePatterns = (patterns, label) => {
   if (list.some(pattern => typeof pattern !== 'string' || pattern.length === 0)) {
     throw new TypeError(`${label} must be a glob string or an array of non-empty glob strings`)
   }
-  // Match output-relative paths, including hidden files. Exclusions have their own option.
-  return picomatch(list, { dot: true, nonegate: true })
+  const matchers = list.map(pattern => {
+    // Keep the syntax deliberately small; don't silently misread advanced globs.
+    if (/[{}[\]\\]|[?*+@!]\(/.test(pattern)) {
+      throw new TypeError(`${label}: only *, **, and ? glob wildcards are supported`)
+    }
+    const parts = pattern.split('/')
+    const source = parts.map((part, index) => {
+      if (part === '**') return index === parts.length - 1 ? '[\\s\\S]*' : '(?:[^/]+/)*'
+      if (part.includes('**')) throw new TypeError(`${label}: ** must occupy a whole path segment`)
+      const segment = Array.from(part, character => {
+        if (character === '*') return '[^/]*'
+        if (character === '?') return '[^/]'
+        return character.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      }).join('')
+      return segment + (index === parts.length - 1 ? '' : '/')
+    }).join('')
+    // An absolute end assertion also handles filenames ending in a newline.
+    return new RegExp(`^${source}(?![\\s\\S])`, 'u')
+  })
+  return fileName => matchers.some(matcher => matcher.test(fileName))
 }
 
 const compileFilter = (options, label) => {
@@ -171,11 +186,7 @@ const sizeCheck = function (options = {}) {
         }
         // Rollup writes its progress to stderr too. Keep the report together, with a
         // blank line before and after, and reset each color before returning to Rollup.
-        for (const [index, message] of reports.entries()) {
-          const before = index === 0 ? '\n' : ''
-          const after = index === reports.length - 1 ? '\n' : ''
-          console.error(before + message + after)
-        }
+        if (reports.length > 0) console.error(`\n${reports.join('\n')}\n`)
         if (failures.length > 0) {
           // This is an expected budget violation, not a plugin crash. Passing an
           // Error preserves its concise message without Rollup adding a second prefix.

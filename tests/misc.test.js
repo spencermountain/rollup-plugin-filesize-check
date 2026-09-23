@@ -227,12 +227,42 @@ test('rejects invalid options before building', async t => {
 
 const namedChunk = (fileName, bytes) => ({ ...chunk(bytes), fileName })
 
+test('matches simple glob syntax against complete output paths', async t => {
+  const cases = [
+    ['*.js', ['app.js', '.hidden.js', '.js'], ['nested/app.js', 'appXjs', 'APP.JS', 'app.js\n']],
+    ['**/*.js', ['app.js', 'a/b/app.js', '.hidden/app.js'], ['app.css']],
+    ['assets/**/app?.js', ['assets/app1.js', 'assets/a/b/app😀.js'], ['assets/app.js', 'assets/app12.js', 'assets/app/.js']],
+    ['assets/**', ['assets/app.js', 'assets/a/b/style.css'], ['other/assets/app.js']],
+    ['a*b.js', ['ab.js', 'a-long-b.js'], ['a/b.js']],
+    ['build.(1)+.js', ['build.(1)+.js'], ['buildX111.js']],
+    ['!app.js', ['!app.js'], ['app.js']],
+    ['**', ['app.js', 'a/b/app.css'], []]
+  ]
+  for (const [pattern, matches, misses] of cases) {
+    for (const fileName of matches) {
+      t.equal(inspect({ include: pattern }, namedChunk(fileName, 1)).logs.length, 1, `${pattern} matches ${JSON.stringify(fileName)}`)
+    }
+    for (const fileName of misses) {
+      t.equal(inspect({ include: pattern }, namedChunk(fileName, 1)).logs.length, 0, `${pattern} excludes ${JSON.stringify(fileName)}`)
+    }
+  }
+})
+
+test('rejects unsupported glob syntax with the option location', async t => {
+  for (const pattern of ['*.{js,css}', '[ab].js', '@(app|vendor).js', '!(app).js', '?(app).js', '*(app).js', '+(app).js', 'assets\\*.js', 'app**.js', '***']) {
+    t.throws(() => sizeCheck({ include: pattern }), /options\.include:.*(supported|whole path segment)/, `rejects ${pattern}`)
+  }
+  t.throws(() => sizeCheck({ exclude: '[ab].js' }), /options\.exclude:/, 'validates exclusions')
+  t.throws(() => sizeCheck({ budgets: [{ include: '*.js', exclude: '*.{js,css}' }] }), /options\.budgets\[0\]\.exclude:/, 'validates budget patterns')
+})
+
 test('filters output-relative globs and gives exclusions priority', async t => {
   const outputs = [namedChunk('app.js', 0), namedChunk('nested/app.js', 1), namedChunk('.hidden.js', 0), namedChunk('app.js.map', 1), { type: 'asset', fileName: 'style.css', source: '' }]
   const result = inspect({ include: '**/*.js', exclude: 'nested/**' }, outputs)
-  t.equal(result.logs.length, 2, 'includes root and hidden JS, excluding nested JS, maps, and CSS')
+  t.deepEqual(result.logs, ['\n  Filesize:  app.js     = 0.00kb\n  Filesize:  .hidden.js = 0.00kb\n'], 'reports selected files together with alignment and surrounding newlines')
   t.equal(inspect({ include: [] }, outputs).logs.length, 0, 'empty include selects nothing')
-  t.equal(inspect({ include: ['*.js', '*.css'], exclude: [] }, outputs).logs.length, 3, 'arrays select multiple output types')
+  const report = inspect({ include: ['*.js', '*.css'], exclude: [] }, outputs).logs.join('')
+  t.deepEqual([...report.matchAll(/Filesize:  (\S+)/g)].map(match => match[1]), ['app.js', '.hidden.js', 'style.css'], 'arrays select multiple output types')
   t.equal(inspect({ exclude: '**/*' }, outputs).logs.length, 0, 'all-excluded output is valid')
 })
 

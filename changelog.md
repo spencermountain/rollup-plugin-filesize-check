@@ -1,3 +1,6 @@
+## 2.0.1 - [Sep 2026]
+- **[change]** - remove dependencies
+
 ## 2.0.0 - [Sep 2026]
 no breaking API changes. The original `sizeCheck({ expect, warn })` syntax remains supported. 
 
@@ -18,6 +21,7 @@ no breaking API changes. The original `sizeCheck({ expect, warn })` syntax remai
 - **[change]** - reject invalid option values and unknown options; warn when a tolerance is supplied without `expect`
 - **[change]** - require Node.js 18+ and Rollup 2.78.0+, with no upper bound on the Rollup peer dependency
 - **[internal]** - expand behavior, CLI, color, TypeScript, and Rollup compatibility checks
+- **[internal]** - replace Picomatch with a dependency-free matcher supporting `*`, `**`, and `?`; reject unsupported advanced glob syntax
 
 
 ## 1.2.0 - [Jul 2024]

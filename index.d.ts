@@ -11,6 +11,7 @@ export interface SizeBudget {
   failOnError?: boolean
 }
 
+/** Case-sensitive output paths supporting *, ?, and whole-segment **. Use / as separator. */
 export type FilePatterns = string | string[]
 
 export interface FileSizeBudget extends SizeBudget {
