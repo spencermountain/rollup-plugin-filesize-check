@@ -17,7 +17,7 @@ no breaking API changes. The original `sizeCheck({ expect, warn })` syntax remai
 - **[change]** - integrate with Rollup's warning and error handling, including structured filesize diagnostics
 - **[change]** - reject invalid option values and unknown options; warn when a tolerance is supplied without `expect`
 - **[change]** - require Node.js 18+ and Rollup 2.78.0+, with no upper bound on the Rollup peer dependency
-- **[internal]** - expand behavior, CLI, color, TypeScript, and Rollup compatibility checks; use Tape with the tap-dancer reporter
+- **[internal]** - expand behavior, CLI, color, TypeScript, and Rollup compatibility checks
 
 
 ## 1.2.0 - [Jul 2024]
