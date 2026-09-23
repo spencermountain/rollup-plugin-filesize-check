@@ -27,7 +27,7 @@ export default [
     output: [{ file: 'builds/out.js', format: 'umd' }],
     plugins: [
       sizeCheck({
-        expect: 95, // sizes in kb
+        expect: 95, // sizes in KiB (1024 bytes)
         warn: 5 // acceptable diff (+/-)
       })
     ]
@@ -35,13 +35,25 @@ export default [
 ]
 ```
 
-looks best with `rollup -c --silent` flag
+Sizes are checked separately for every output chunk and asset, including CSS and
+binary assets. Comparisons use exact bytes; displayed sizes are rounded to two
+decimal places. Both smaller and larger outputs can fall outside the tolerance.
 
 ## Options
 
-- **expect <number>** (optional): the size, in kilobytes, you expect the builds to be
+- **expect <number>** (optional): the expected size of each output in KiB (1024 bytes). Omit to only report sizes. Zero is supported.
+- **warn <number>** (optional): the acceptable difference (+/-) in KiB. An output warns only when its difference exceeds this value; an exact boundary passes. Zero requires an exact match. Omit to report differences without checking a tolerance.
+- **failOnError <boolean>** (optional, default `false`): fail the build instead of warning when an output falls outside the tolerance. Requires both `expect` and `warn`.
 
-* **warn <number>** (optional): a difference (+/-), in kilobytes, that like to be warned of (with red text)
+For CI builds:
+
+```js
+sizeCheck({ expect: 95, warn: 5, failOnError: true })
+```
+
+Budget violations use Rollup's warning/error handling with plugin code
+`FILESIZE_EXCEEDED`. Warnings can be captured with `onwarn` and are suppressed by
+Rollup's `--silent` flag. Build errors still fail the build.
 
 ## See also
 
