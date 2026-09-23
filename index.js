@@ -176,7 +176,7 @@ const sizeCheck = function (options = {}) {
           const after = index === reports.length - 1 ? '\n' : ''
           console.error(before + message + after)
         }
-        if (failures.length) {
+        if (failures.length > 0) {
           // This is an expected budget violation, not a plugin crash. Passing an
           // Error preserves its concise message without Rollup adding a second prefix.
           const message = `${paint('Size check failed:', 31, colored)}\n${failures.map((failure) => failure.message).join('\n')}\n`
