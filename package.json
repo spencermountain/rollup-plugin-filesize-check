@@ -1,12 +1,10 @@
 {
   "name": "rollup-plugin-filesize-check",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "ensure rollup builds are the expected size",
   "license": "MIT",
   "repository": "github:spencermountain/rollup-plugin-filesize-check",
-  "homepage": "https://github.com/spencermountain/rollup-plugin-filesize-check#readme",
-  "bugs": "https://github.com/spencermountain/rollup-plugin-filesize-check/issues",
-  "author": "spencermountain",
+  "author": "Spencer Kelly <spencermountain@gmail.com> (https://spencermountain.dev)",
   "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -16,7 +14,7 @@
   },
   "packageManager": "pnpm@9.12.0",
   "scripts": {
-    "test": "tape \"./tests/**/*.test.js\"",
+    "test": "tape ./tests/reporter.js \"./tests/**/*.test.js\"",
     "lint": "eslint .",
     "test:types": "tsc -p tests/tsconfig.json",
     "check": "npm test && npm run test:types && npm run lint"
@@ -30,16 +28,16 @@
     "filesize"
   ],
   "dependencies": {
-    "picomatch": "^4.0.3"
+    "picomatch": "4.0.3"
   },
   "devDependencies": {
-    "eslint": "^10.11.0",
-    "rollup": "^4.63.4",
+    "eslint": "10.11.0",
+    "rollup": "4.63.4",
+    "tap-dancer": "0.4.1",
     "tape": "5.10.2",
-    "tape-async": "^2.3.0",
-    "typescript": "^5.9.3"
+    "typescript": "7.0.2"
   },
   "peerDependencies": {
-    "rollup": "^4.63.4"
+    "rollup": ">=2.78.0"
   }
 }

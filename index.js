@@ -1,22 +1,46 @@
 /* eslint-disable no-console */
 import picomatch from 'picomatch'
 const statusColors = { PASS: 32, WARN: 33, FAIL: 31 }
+const statusLabels = {
+  SIZE: 'Filesize:',
+  PASS: 'Filesize ok:',
+  WARN: 'Filesize warning:',
+  FAIL: 'Filesize error:'
+}
 
 const useColor = (option, stream) => {
   if (typeof option === 'boolean') return option
   return Boolean(stream.isTTY) && process.env.NO_COLOR === undefined && process.env.TERM !== 'dumb'
 }
 
-const paint = (text, status, enabled) => {
-  if (!enabled || !statusColors[status]) return text
-  return `\x1b[${statusColors[status]}m${text}\x1b[0m`
+const paint = (text, color, enabled) => {
+  if (!enabled || !color) return text
+  return `\x1b[${color}m${text}\x1b[0m`
 }
 
 const formatDifference = bytes => {
   const sign = bytes > 0 ? '+' : ''
-  // Keep small changes visible instead of displaying +0.00 KiB.
+  // Keep small changes visible instead of displaying +0.00kb.
   if (Math.abs(bytes) < 10 && bytes !== 0) return `${sign}${Number(bytes.toFixed(2))} B`
-  return `${sign}${(bytes / 1024).toFixed(2)} KiB`
+  return `${sign}${(bytes / 1024).toFixed(2)}kb`
+}
+
+const formatRow = (row, widths, colored, showLabel = true) => {
+  const label = paint(statusLabels[row.status], statusColors[row.status], colored)
+  const name = paint(row.fileName.padEnd(widths.name), 36, colored)
+  const size = paint(row.size.padStart(widths.size), 34, colored)
+  const prefix = showLabel ? `  ${label}  ` : '  '
+  let message = `${prefix}${name} ${size}`
+  if (row.diff !== undefined) {
+    if (row.status === 'WARN' || row.status === 'FAIL') {
+      const direction = row.diff > 0 ? 'over' : 'below'
+      const difference = formatDifference(Math.abs(row.diff)).replace(/^\+/, '')
+      message += `  - ${paint(difference, 35, colored)} ${direction} limit of ${paint(`${row.expect}kb`, 34, colored)}`
+    } else {
+      message += `  (${paint(formatDifference(row.diff), 35, colored)})`
+    }
+  }
+  return message
 }
 
 const budgetKeys = ['expect', 'warn', 'throw', 'failOnError']
@@ -84,53 +108,86 @@ const sizeCheck = function (options = {}) {
 
   return {
     name: 'filesize',
-    buildStart() {
+    renderStart() {
       for (const message of configWarnings) this.warn({ code: 'INVALID_SIZE_BUDGET', message })
     },
     generateBundle: {
       order: 'post',
       handler(_o, bundle) {
-        const rows = Object.values(bundle).filter(obj => filter(obj.fileName)).map(obj => {
-          const budget = budgets.find(rule => rule.matches(obj.fileName)) || options
-          let failureTolerance = budget.throw
-          if (failureTolerance === undefined && budget.failOnError) failureTolerance = budget.warn
-          const bytes = Buffer.byteLength(obj.type === 'asset' ? obj.source : obj.code)
-          const diff = budget.expect === undefined ? undefined : bytes - budget.expect * 1024
-          const checked = diff !== undefined && (budget.warn !== undefined || failureTolerance !== undefined)
-          const warns = diff !== undefined && budget.warn !== undefined && Math.abs(diff) > budget.warn * 1024
-          const fails = diff !== undefined && failureTolerance !== undefined && Math.abs(diff) > failureTolerance * 1024
-          let status = checked ? 'PASS' : 'SIZE'
-          if (warns) status = 'WARN'
-          if (fails) status = 'FAIL'
-          const tolerance = fails ? failureTolerance : budget.warn
-          return { fileName: obj.fileName, bytes, diff, status, tolerance, expect: budget.expect, size: `${(bytes / 1024).toFixed(2)} KiB` }
-        })
+        const rows = Object.values(bundle)
+          .filter((obj) => filter(obj.fileName))
+          .map((obj) => {
+            const budget = budgets.find((rule) => rule.matches(obj.fileName)) || options
+            let failureTolerance = budget.throw
+            if (failureTolerance === undefined && budget.failOnError) failureTolerance = budget.warn
+            const bytes = Buffer.byteLength(obj.type === 'asset' ? obj.source : obj.code)
+            const diff = budget.expect === undefined ? undefined : bytes - budget.expect * 1024
+            const checked =
+              diff !== undefined && (budget.warn !== undefined || failureTolerance !== undefined)
+            const warns =
+              diff !== undefined && budget.warn !== undefined && Math.abs(diff) > budget.warn * 1024
+            const fails =
+              diff !== undefined &&
+              failureTolerance !== undefined &&
+              Math.abs(diff) > failureTolerance * 1024
+            let status = checked ? 'PASS' : 'SIZE'
+            if (warns) status = 'WARN'
+            if (fails) status = 'FAIL'
+            const tolerance = fails ? failureTolerance : budget.warn
+            return {
+              fileName: obj.fileName,
+              bytes,
+              diff,
+              status,
+              tolerance,
+              expect: budget.expect,
+              size: `${(bytes / 1024).toFixed(2)}kb`
+            }
+          })
         const nameWidth = rows.reduce((width, row) => Math.max(width, row.fileName.length), 0)
         const sizeWidth = rows.reduce((width, row) => Math.max(width, row.size.length), 0)
         const failures = []
+        const reports = []
+        const colored = useColor(options.color, process.stderr)
+        const widths = { name: nameWidth, size: sizeWidth }
 
         for (const row of rows) {
-          let message = `  ${row.status}  ${row.fileName.padEnd(nameWidth)}  ${row.size.padStart(sizeWidth)}`
-          if (row.diff !== undefined) message += `  (${formatDifference(row.diff)})`
+          const message = formatRow(row, widths, colored, row.status !== 'FAIL')
+          // Keep size reports visible with --silent; fatal rows appear in the combined error.
+          if (row.status !== 'FAIL') reports.push(message)
           if (row.status === 'FAIL' || row.status === 'WARN') {
-            message += ` — ${row.bytes} bytes is outside the expected ${row.expect} KiB ± ${row.tolerance} KiB`
+            const detail = ` (±${row.tolerance} kb)`
             const diagnostic = {
               code: 'FILESIZE_EXCEEDED',
-              message: paint(message, row.status, useColor(options.color, process.stderr)),
-              fileName: row.fileName
+              message: message + paint(detail, 90, colored),
+              fileName: row.fileName,
+              bytes: row.bytes,
+              expectedKiB: row.expect,
+              toleranceKiB: row.tolerance
             }
             if (row.status === 'FAIL') failures.push(diagnostic)
             else this.warn(diagnostic)
-          } else {
-            console.log(paint(message, row.status, useColor(options.color, process.stdout)))
           }
         }
+        // Rollup writes its progress to stderr too. Keep the report together, with a
+        // blank line before and after, and reset each color before returning to Rollup.
+        for (const [index, message] of reports.entries()) {
+          const before = index === 0 ? '\n' : ''
+          const after = index === reports.length - 1 ? '\n' : ''
+          console.error(before + message + after)
+        }
         if (failures.length) {
-          this.error({
+          // This is an expected budget violation, not a plugin crash. Passing an
+          // Error preserves its concise message without Rollup adding a second prefix.
+          const message = `${paint('Size check failed:', 31, colored)}\n${failures.map((failure) => failure.message).join('\n')}\n`
+          const error = Object.assign(new Error(message), {
+            name: '',
+            stack: '',
             code: 'FILESIZE_EXCEEDED',
-            message: `${failures.length} output(s) outside size tolerance:\n${failures.map(failure => failure.message).join('\n')}`,
-            fileNames: failures.map(failure => failure.fileName)
+            fileNames: failures.map((failure) => failure.fileName),
+            failures
           })
+          this.error(error)
         }
       }
     }

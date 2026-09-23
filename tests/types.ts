@@ -31,3 +31,8 @@ sizeCheck({ include: 12 })
 sizeCheck({ budgets: [{ expect: 95 }] })
 // @ts-expect-error Per-file tolerances must be numeric.
 sizeCheck({ budgets: [{ include: '*.js', throw: '5' }] })
+
+const outputConfig: RollupOptions = {
+  output: { format: 'umd', name: 'example', plugins: [sizeCheck({ expect: 200, warn: 5 })] }
+}
+void outputConfig

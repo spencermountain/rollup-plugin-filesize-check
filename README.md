@@ -38,7 +38,11 @@ export default [
 Sizes are checked separately for every output chunk and asset, including CSS and
 binary assets. Comparisons use exact bytes; displayed sizes are rounded to two
 decimal places. Both smaller and larger outputs can fall outside the tolerance.
-Requires Rollup 4.63.4 or later within version 4.
+Requires Rollup 2.78.0 or later and Node.js 18 or later. Rollup 2.78.0 introduced
+the ordered plugin hooks this plugin uses. Compatibility checks cover Rollup
+2.78.0, 2.79.2, 3.0.0, 3.29.5, 4.0.0, and 4.63.4, including TypeScript and CLI use.
+The peer range has no upper bound, allowing future major releases without a
+dependency conflict; compatibility with those future releases is not yet verified.
 
 ## Options
 
@@ -54,7 +58,7 @@ Requires Rollup 4.63.4 or later within version 4.
 Numeric options must be finite, non-negative numbers. Invalid types and unknown
 options throw a configuration error immediately. Supplying a tolerance without
 `expect`, or `failOnError` without a failure threshold, emits an
-`INVALID_SIZE_BUDGET` warning at the start of each build.
+`INVALID_SIZE_BUDGET` warning at the start of each output generation.
 
 ## Selecting files and budgets
 
@@ -96,37 +100,55 @@ To fail without a warning tier, use `sizeCheck({ expect: 95, throw: 5 })`.
 Omit both `warn` and `throw` to report differences without enforcing a tolerance.
 
 Budget violations use Rollup's warning/error handling with plugin code
-`FILESIZE_EXCEEDED`. Warnings can be captured with `onwarn` and are suppressed by
-Rollup's `--silent` flag. Build errors still fail the build.
+`FILESIZE_EXCEEDED`. Warnings can be captured with `onwarn`. Rollup's `--silent`
+flag suppresses its warning diagnostics, but the plugin's compact size report
+(including `Filesize warning:` rows) remains visible. A `warn` threshold does not fail the
+build; use `throw` for that. Build errors still fail under `--silent`.
 All failing files in an output bundle are collected into one error with a
 `fileNames` array. Passing files and warnings are still reported before that
 error is raised. Separate output configurations are checked separately.
+Expected size failures omit stack traces and repeat neither the plugin name nor
+the byte count. Exact `bytes`, `expectedKiB`, and `toleranceKiB` remain available
+on warning diagnostics and on each entry in an error's `failures` array.
+
+```text
+[!] (plugin filesize) Size check failed:
+  spacetime.min.js 50.06kb  - 149.94kb below limit of 200kb (±5 kb)
+```
 
 Checks run in a `generateBundle` hook with `order: 'post'`, after ordinary hooks.
 Place this plugin after other plugins with `post` hooks if they change file sizes.
 Changes made later in `writeBundle` are not measured.
+The plugin works in either the top-level `plugins` array or an individual
+output's `plugins` array, after a minifier such as Terser.
 
 ## Output
 
 ```text
-  PASS  app.js       94.50 KiB  (-0.50 KiB)
-  PASS  vendor.js    96.00 KiB  (+1.00 KiB)
+  Filesize ok:  app.js 94.50kb  (-0.50kb)
+  Filesize warning:  spacetime.min.js 50.06kb  - 149.94kb below limit of 200kb
 ```
 
 Filenames and sizes align across outputs. Positive differences mean larger than
 expected; negative differences mean smaller. Tiny differences use bytes so a
-one-byte change appears as `+1 B`, not `+0.00 KiB`.
+one-byte change appears as `1 B`, not `0.00kb`. The compact `kb` label
+still represents 1024 bytes. Warnings and errors describe the absolute difference
+from `expect` as “over limit” or “below limit”; `warn` and `throw` remain the
+allowed tolerances around that expected size.
 
-Colors describe the check result, not the direction of the change:
+Label colors describe the check result, not the direction of the change:
 
-- `SIZE`: neutral, when no tolerance is being checked.
-- `PASS`: green, within tolerance (including a small increase).
-- `WARN`: yellow, outside tolerance in either direction.
-- `FAIL`: red, outside the `throw` tolerance (or the `warn` tolerance with `failOnError: true` when `throw` is omitted).
+- `Filesize:`: neutral, when no tolerance is being checked.
+- `Filesize ok:`: green, within tolerance (including a small increase).
+- `Filesize warning:`: yellow, outside tolerance in either direction.
+- `Size check failed:`: red heading, outside the `throw` tolerance (or the `warn` tolerance with `failOnError: true` when `throw` is omitted).
 
 Both unusually small and unusually large bundles can indicate a broken build,
 so a decrease outside the configured tolerance still warns or fails. Redirected output
 has no plugin ANSI codes by default; status labels remain readable without color.
+Filenames are cyan, sizes and expected limits are blue, and differences are magenta.
+Each colored field resets independently. Reports use stderr alongside Rollup's
+progress messages, with a blank line before and after the report and a final newline.
 
 ## TypeScript
 
