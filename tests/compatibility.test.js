@@ -38,16 +38,17 @@ for (const placement of ['input', 'output']) {
       plugins: placement === 'input' ? [plugin, fixture()] : [fixture()]
     })
     const originalError = console.error
+    let result
     try {
       console.error = line => logs.push(line)
-      await bundle.generate({ format: 'es', plugins: placement === 'output' ? [plugin] : [] })
+      result = await bundle.generate({ format: 'es', plugins: placement === 'output' ? [plugin] : [] })
     } finally {
       console.error = originalError
       await bundle.close()
     }
     t.equal(warnings.length, 0, 'no unsupported hook or budget warnings')
-    t.equal(logs.length, 2, 'selected chunk and asset pass after the ordinary hook runs')
-    t.ok(logs.every(line => line.includes('Filesize ok:')), 'each file passes its own exact budget')
+    t.equal(logs.length, 0, 'passing checks emit no output or blank lines')
+    t.equal(result.output.length, 3, 'all outputs are still generated')
   })
 
   test(`Rollup ${VERSION}: ${placement} warnings and aggregate failures`, async t => {
@@ -83,18 +84,22 @@ test(`Rollup ${VERSION}: actual silent CLI warnings and failures`, async t => {
   // All supported versions expose their CLI alongside the resolved JS entry point.
   const cli = join(rollupPath, '..', 'bin', 'rollup')
   try {
-    for (const threshold of ['warn', 'throw']) {
+    for (const threshold of ['warn', 'throw', 'pass']) {
       writeFileSync(config, `
 import sizeCheck from ${JSON.stringify(new URL('../index.js', import.meta.url).href)}
 export default {
   input: 'entry',
   plugins: [{ name: 'fixture', resolveId: id => id, load: () => 'export default 42' }],
-  output: { file: ${JSON.stringify(join(directory, 'out.js'))}, format: 'es', plugins: [sizeCheck({ expect: 200, ${threshold}: 5, color: false })] }
+  output: { file: ${JSON.stringify(join(directory, 'out.js'))}, format: 'es', plugins: [sizeCheck({ expect: 200, ${threshold === 'pass' ? 'throw: 200' : `${threshold}: 5`}, color: false })] }
 }
 `)
       const result = spawnSync(process.execPath, [cli, '-c', config, '--silent'], { encoding: 'utf8' })
-      t.equal(result.status, threshold === 'warn' ? 0 : 1, `${threshold} has the correct exit status`)
-      t.match(result.stderr, threshold === 'warn' ? /Filesize warning:/ : /Size check failed:/, 'size report remains visible')
+      t.equal(result.status, threshold === 'throw' ? 1 : 0, `${threshold} has the correct exit status`)
+      if (threshold === 'pass') {
+        t.equal(result.stdout + result.stderr, '', 'successful CLI checks are completely silent')
+      } else {
+        t.match(result.stderr, threshold === 'warn' ? /Filesize warning:/ : /Size check failed:/, 'size report remains visible')
+      }
       t.notOk(result.stderr.includes('RollupError'), 'no redundant RollupError prefix')
     }
   } finally {

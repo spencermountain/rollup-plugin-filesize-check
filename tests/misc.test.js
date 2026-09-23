@@ -114,16 +114,16 @@ test('uses explicit status labels and consistent severity colors', async t => {
   const report = inspect({ color: true }, chunk(1024)).logs[0]
   t.match(report, /Filesize:/, 'report-only output is labeled')
   t.match(report, /Filesize:  \x1b\[36m/, 'report label stays neutral and filename is cyan')
-  const pass = inspect({ expect: 1, warn: 1, color: true }, chunk(1536)).logs[0]
-  t.match(pass.replace(/\x1b\[[0-9;]*m/g, ''), /Filesize ok:.*\(\+0\.50kb\)/, 'an allowed increase passes')
-  t.ok(pass.trimStart().startsWith('\x1b[32m'), 'pass label is green')
+  const pass = inspect({ expect: 1, warn: 1, color: true }, chunk(1536))
+  t.deepEqual(pass.logs, [], 'passing checks are silent even when colors are enabled')
+  t.deepEqual(pass.warnings, [], 'an allowed increase does not warn')
   for (const bytes of [0, 2048]) {
     const warning = inspect({ expect: 1, warn: 0, color: true }, chunk(bytes)).warnings[0]
     t.ok(warning.message.trimStart().startsWith('\x1b[33m'), 'either direction outside tolerance is yellow')
     t.match(warning.message, /Filesize warning:/, 'warning has a text label')
   }
   t.throws(() => inspect({ expect: 0, warn: 0, failOnError: true, color: true }, chunk(1)), /\x1b\[31m.*Size check failed:/, 'failure is red and labeled')
-  const plain = inspect({ expect: 1, warn: 0, color: false }, chunk(1024)).logs[0]
+  const plain = inspect({ color: false }, chunk(1024)).logs[0]
   t.notOk(plain.includes('\x1b['), 'color false disables ANSI')
   const warning = inspect({ expect: 0, warn: 0, color: false }, chunk(1)).warnings[0]
   t.notOk(warning.message.includes('\x1b['), 'color false also applies to diagnostics')
@@ -134,14 +134,14 @@ test('automatic colors respect terminal capabilities and NO_COLOR', async t => {
   const descriptor = Object.getOwnPropertyDescriptor(process.stderr, 'isTTY')
   const oldNoColor = process.env.NO_COLOR
   const oldTerm = process.env.TERM
-  const report = () => inspect({ expect: 1, warn: 0, color: 'auto' }, chunk(1024)).logs[0]
+  const report = () => inspect({ color: 'auto' }, chunk(1024)).logs[0]
   try {
     delete process.env.NO_COLOR
     process.env.TERM = 'xterm'
     Object.defineProperty(process.stderr, 'isTTY', { configurable: true, value: false })
     t.notOk(report().includes('\x1b['), 'redirected output has no ANSI')
     Object.defineProperty(process.stderr, 'isTTY', { configurable: true, value: true })
-    t.ok(report().includes('\x1b[32m'), 'interactive terminal gets green pass output')
+    t.ok(report().includes('\x1b[36m'), 'interactive terminal gets a cyan filename')
     process.env.NO_COLOR = ''
     t.notOk(report().includes('\x1b['), 'NO_COLOR disables ANSI')
     delete process.env.NO_COLOR
@@ -160,7 +160,7 @@ test('automatic colors respect terminal capabilities and NO_COLOR', async t => {
 test('independent warning and failure tolerances check both directions', async t => {
   const options = { expect: 2, warn: 0.5, throw: 1, color: false }
   for (const bytes of [1536, 2048, 2560]) {
-    t.match(inspect(options, chunk(bytes)).logs[0], /Filesize ok:/, `${bytes} bytes passes including warning boundaries`)
+    t.deepEqual(inspect(options, chunk(bytes)), { warnings: [], logs: [] }, `${bytes} bytes passes silently including warning boundaries`)
   }
   for (const bytes of [1024, 1535, 2561, 3072]) {
     const result = inspect(options, chunk(bytes))
@@ -173,7 +173,7 @@ test('independent warning and failure tolerances check both directions', async t
 })
 
 test('throw works independently, including zero tolerance and expectation', async t => {
-  t.match(inspect({ expect: 0, throw: 0 }, chunk(0)).logs[0], /Filesize ok:/, 'empty output matches zero')
+  t.deepEqual(inspect({ expect: 0, throw: 0 }, chunk(0)), { warnings: [], logs: [] }, 'empty output matches zero silently')
   t.throws(() => inspect({ expect: 0, throw: 0 }, chunk(1)), /Size check failed:/, 'one byte violates zero tolerance')
   for (const bytes of [1023, 1025]) {
     t.throws(() => inspect({ expect: 1, throw: 0 }, chunk(bytes)), /Size check failed:/, 'zero tolerance fails in either direction')
@@ -223,7 +223,7 @@ const namedChunk = (fileName, bytes) => ({ ...chunk(bytes), fileName })
 
 test('filters output-relative globs and gives exclusions priority', async t => {
   const outputs = [namedChunk('app.js', 0), namedChunk('nested/app.js', 1), namedChunk('.hidden.js', 0), namedChunk('app.js.map', 1), { type: 'asset', fileName: 'style.css', source: '' }]
-  const result = inspect({ expect: 0, throw: 0, include: '**/*.js', exclude: 'nested/**' }, outputs)
+  const result = inspect({ include: '**/*.js', exclude: 'nested/**' }, outputs)
   t.equal(result.logs.length, 2, 'includes root and hidden JS, excluding nested JS, maps, and CSS')
   t.equal(inspect({ include: [] }, outputs).logs.length, 0, 'empty include selects nothing')
   t.equal(inspect({ include: ['*.js', '*.css'], exclude: [] }, outputs).logs.length, 3, 'arrays select multiple output types')
@@ -240,7 +240,7 @@ test('per-file budgets are independent, first-match wins, and unmatched files us
     ]
   }
   const outputs = [namedChunk('app.js', 1024), namedChunk('nested/app.js', 2048), namedChunk('vendor.js', 0), { type: 'asset', fileName: 'style.css', source: 'x'.repeat(3072) }, namedChunk('other.txt', 0)]
-  t.equal(inspect(options, outputs).logs.length, 5, 'each output passes its selected budget')
+  t.deepEqual(inspect(options, outputs), { warnings: [], logs: [] }, 'each output passes its selected budget silently')
   t.match(inspect({ expect: 0, throw: 0, budgets: [{ include: '*.js' }] }, chunk(1024)).logs[0], /Filesize:/, 'a report-only rule does not inherit global limits')
   const missing = inspect({ budgets: [{ include: '*.js', throw: 0 }] }, chunk(1))
   t.match(missing.warnings[0].message, /budgets\[0\].*expect/, 'incomplete rule warns with its index')
@@ -266,7 +266,8 @@ test('collects every failure and continues reporting other outputs', async t => 
   t.match(errors[0].message, /small\.js/, 'reports undersized output')
   t.match(errors[0].message, /large\.js/, 'reports oversized output')
   t.equal(warnings.length, 1, 'still reports the warning')
-  t.match(logs[0], /Filesize ok:.*pass\.js/, 'still reports passing output')
+  t.equal(logs.length, 1, 'passing output stays silent in a mixed build')
+  t.match(logs[0], /Filesize warning:.*warn\.js/, 'only the warning is printed before the error')
 })
 
 test('post hook observes later ordinary hooks and warnings reach Rollup', async t => {

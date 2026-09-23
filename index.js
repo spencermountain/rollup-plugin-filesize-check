@@ -1,9 +1,8 @@
 /* eslint-disable no-console */
 import picomatch from 'picomatch'
-const statusColors = { PASS: 32, WARN: 33, FAIL: 31 }
+const statusColors = { WARN: 33, FAIL: 31 }
 const statusLabels = {
   SIZE: 'Filesize:',
-  PASS: 'Filesize ok:',
   WARN: 'Filesize warning:',
   FAIL: 'Filesize error:'
 }
@@ -144,6 +143,7 @@ const sizeCheck = function (options = {}) {
               size: `${(bytes / 1024).toFixed(2)}kb`
             }
           })
+          .filter(row => row.status !== 'PASS')
         const nameWidth = rows.reduce((width, row) => Math.max(width, row.fileName.length), 0)
         const sizeWidth = rows.reduce((width, row) => Math.max(width, row.size.length), 0)
         const failures = []

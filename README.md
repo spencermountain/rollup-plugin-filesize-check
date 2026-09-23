@@ -27,8 +27,9 @@ export default [
     output: [{ file: 'builds/out.js', format: 'umd' }],
     plugins: [
       sizeCheck({
-        expect: 95, // sizes in KiB (1024 bytes)
-        warn: 5 // acceptable diff (+/-)
+        expect: 50, // sizes in kb
+        warn: 5,  // acceptable change (+/-)
+        throw: 25 // unacceptable change (+/-)
       })
     ]
   }
@@ -105,8 +106,9 @@ flag suppresses its warning diagnostics, but the plugin's compact size report
 (including `Filesize warning:` rows) remains visible. A `warn` threshold does not fail the
 build; use `throw` for that. Build errors still fail under `--silent`.
 All failing files in an output bundle are collected into one error with a
-`fileNames` array. Passing files and warnings are still reported before that
-error is raised. Separate output configurations are checked separately.
+`fileNames` array. Warnings are still reported before that error is raised.
+Passing size checks are silent, including in builds where other files warn or
+fail. Separate output configurations are checked separately.
 Expected size failures omit stack traces and repeat neither the plugin name nor
 the byte count. Exact `bytes`, `expectedKiB`, and `toleranceKiB` remain available
 on warning diagnostics and on each entry in an error's `failures` array.
@@ -125,11 +127,12 @@ output's `plugins` array, after a minifier such as Terser.
 ## Output
 
 ```text
-  Filesize ok:  app.js 94.50kb  (-0.50kb)
   Filesize warning:  spacetime.min.js 50.06kb  - 149.94kb below limit of 200kb
 ```
 
-Filenames and sizes align across outputs. Positive differences mean larger than
+Files within a configured tolerance produce no success message or blank lines.
+Without a tolerance, report-only output still shows sizes and differences.
+Filenames and sizes align across reported outputs. Positive differences mean larger than
 expected; negative differences mean smaller. Tiny differences use bytes so a
 one-byte change appears as `1 B`, not `0.00kb`. The compact `kb` label
 still represents 1024 bytes. Warnings and errors describe the absolute difference
@@ -139,7 +142,6 @@ allowed tolerances around that expected size.
 Label colors describe the check result, not the direction of the change:
 
 - `Filesize:`: neutral, when no tolerance is being checked.
-- `Filesize ok:`: green, within tolerance (including a small increase).
 - `Filesize warning:`: yellow, outside tolerance in either direction.
 - `Size check failed:`: red heading, outside the `throw` tolerance (or the `warn` tolerance with `failOnError: true` when `throw` is omitted).
 
