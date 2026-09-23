@@ -127,7 +127,7 @@ test('uses explicit status labels and consistent severity colors', async t => {
   t.notOk(plain.includes('\x1b['), 'color false disables ANSI')
   const warning = inspect({ expect: 0, warn: 0, color: false }, chunk(1)).warnings[0]
   t.notOk(warning.message.includes('\x1b['), 'color false also applies to diagnostics')
-  t.match(warning.message, /1 B over limit/, 'one-byte differences do not round to zero')
+  t.match(warning.message, /above limit of 0kb  - over by 1 B/, 'one-byte differences do not round to zero')
 })
 
 test('automatic colors respect terminal capabilities and NO_COLOR', async t => {
@@ -165,10 +165,16 @@ test('independent warning and failure tolerances check both directions', async t
   for (const bytes of [1024, 1535, 2561, 3072]) {
     const result = inspect(options, chunk(bytes))
     t.equal(result.warnings.length, 1, `${bytes} bytes only warns including failure boundaries`)
-    t.match(result.warnings[0].message, /±0\.5 kb/, 'warning uses its own tolerance')
+    t.equal(result.warnings[0].toleranceKiB, 0.5, 'warning uses its own tolerance')
   }
   for (const bytes of [1023, 3073]) {
-    t.throws(() => inspect(options, chunk(bytes)), /Size check failed:[\s\S]*±1 kb/, `${bytes} bytes fails with its own tolerance`)
+    let failure
+    try {
+      inspect(options, chunk(bytes))
+    } catch (error) {
+      failure = error
+    }
+    t.equal(failure?.failures[0].toleranceKiB, 1, `${bytes} bytes fails with its own tolerance`)
   }
 })
 

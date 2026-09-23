@@ -29,12 +29,13 @@ const formatRow = (row, widths, colored, showLabel = true) => {
   const name = paint(row.fileName.padEnd(widths.name), 36, colored)
   const size = paint(row.size.padStart(widths.size), 34, colored)
   const prefix = showLabel ? `  ${label}  ` : '  '
-  let message = `${prefix}${name} ${size}`
+  let message = `${prefix}${name} = ${size}`
   if (row.diff !== undefined) {
     if (row.status === 'WARN' || row.status === 'FAIL') {
-      const direction = row.diff > 0 ? 'over' : 'below'
+      const direction = row.diff > 0 ? 'above' : 'below'
+      const change = row.diff > 0 ? 'over' : 'under'
       const difference = formatDifference(Math.abs(row.diff)).replace(/^\+/, '')
-      message += `  - ${paint(difference, 35, colored)} ${direction} limit of ${paint(`${row.expect}kb`, 34, colored)}`
+      message += `  - ${direction} limit of ${paint(`${row.expect}kb`, 34, colored)}  - ${change} by ${paint(difference, 35, colored)}`
     } else {
       message += `  (${paint(formatDifference(row.diff), 35, colored)})`
     }
@@ -156,10 +157,9 @@ const sizeCheck = function (options = {}) {
           // Keep size reports visible with --silent; fatal rows appear in the combined error.
           if (row.status !== 'FAIL') reports.push(message)
           if (row.status === 'FAIL' || row.status === 'WARN') {
-            const detail = ` (±${row.tolerance} kb)`
             const diagnostic = {
               code: 'FILESIZE_EXCEEDED',
-              message: message + paint(detail, 90, colored),
+              message,
               fileName: row.fileName,
               bytes: row.bytes,
               expectedKiB: row.expect,

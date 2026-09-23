@@ -115,7 +115,7 @@ on warning diagnostics and on each entry in an error's `failures` array.
 
 ```text
 [!] (plugin filesize) Size check failed:
-  spacetime.min.js 50.06kb  - 149.94kb below limit of 200kb (±5 kb)
+  spacetime.min.js = 50.06kb  - below limit of 200kb  - under by 149.94kb
 ```
 
 Checks run in a `generateBundle` hook with `order: 'post'`, after ordinary hooks.
@@ -127,7 +127,7 @@ output's `plugins` array, after a minifier such as Terser.
 ## Output
 
 ```text
-  Filesize warning:  spacetime.min.js 50.06kb  - 149.94kb below limit of 200kb
+  Filesize warning:  spacetime.min.js = 50.06kb  - below limit of 200kb  - under by 149.94kb
 ```
 
 Files within a configured tolerance produce no success message or blank lines.
@@ -136,8 +136,9 @@ Filenames and sizes align across reported outputs. Positive differences mean lar
 expected; negative differences mean smaller. Tiny differences use bytes so a
 one-byte change appears as `1 B`, not `0.00kb`. The compact `kb` label
 still represents 1024 bytes. Warnings and errors describe the absolute difference
-from `expect` as “over limit” or “below limit”; `warn` and `throw` remain the
-allowed tolerances around that expected size.
+from `expect` as “above limit” / “over by” or “below limit” / “under by”. The
+`warn` and `throw` tolerances still apply, but are omitted from the displayed
+message and remain available in diagnostic metadata.
 
 Label colors describe the check result, not the direction of the change:
 
