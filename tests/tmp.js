@@ -69,4 +69,4 @@ const doMath = function() {
   x = cube(x)
   return x
 }
-module.exports = doMath
+export default doMath

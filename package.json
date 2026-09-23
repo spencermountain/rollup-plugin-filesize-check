@@ -5,7 +5,10 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "tape \"./tests/**/*.test.js\" | tap-dancer"
+    "test": "tape \"./tests/**/*.test.js\"",
+    "lint": "eslint .",
+    "test:types": "tsc -p tests/tsconfig.json",
+    "check": "npm test && npm run test:types && npm run lint"
   },
   "repository": {
     "type": "git",
@@ -22,12 +25,22 @@
   },
   "homepage": "https://github.com/spencermountain/rollup-plugin-filesize-check#readme",
   "peerDependencies": {
-    "rollup": "*"
+    "rollup": "^4.63.4"
   },
   "devDependencies": {
     "rollup": "^4.63.4",
-    "tap-dancer": "0.4.0",
     "tape": "5.10.2",
-    "tape-async": "^2.3.0"
-  }
+    "tape-async": "^2.3.0",
+    "typescript": "^5.9.3",
+    "eslint": "^10.11.0"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.3"
+  },
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ]
 }

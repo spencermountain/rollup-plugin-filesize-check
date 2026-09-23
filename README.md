@@ -38,22 +38,116 @@ export default [
 Sizes are checked separately for every output chunk and asset, including CSS and
 binary assets. Comparisons use exact bytes; displayed sizes are rounded to two
 decimal places. Both smaller and larger outputs can fall outside the tolerance.
+Requires Rollup 4.63.4 or later within version 4.
 
 ## Options
 
 - **expect <number>** (optional): the expected size of each output in KiB (1024 bytes). Omit to only report sizes. Zero is supported.
-- **warn <number>** (optional): the acceptable difference (+/-) in KiB. An output warns only when its difference exceeds this value; an exact boundary passes. Zero requires an exact match. Omit to report differences without checking a tolerance.
-- **failOnError <boolean>** (optional, default `false`): fail the build instead of warning when an output falls outside the tolerance. Requires both `expect` and `warn`.
+- **warn <number>** (optional): the warning tolerance (+/-) in KiB. Requires `expect`. An output warns only when its difference exceeds this value. Zero requires an exact match.
+- **throw <number>** (optional): the build failure tolerance (+/-) in KiB. Requires `expect` and works with or without `warn`. Zero requires an exact match. A failure takes priority over a warning.
+- **failOnError <boolean>** (optional, default `false`): fail at the `warn` tolerance when `throw` is omitted. Requires both `expect` and `warn`. An explicit `throw` value takes precedence.
+- **color <boolean | 'auto'>** (optional, default `'auto'`): color interactive terminal output, respecting `NO_COLOR` and `TERM=dumb`. Use `false` for plain text or `true` to force ANSI colors. This controls the plugin's messages; Rollup controls its own diagnostic formatting.
+- **include <string | string[]>** (optional): select output-relative paths using globs. Omit to select all files; `[]` selects none.
+- **exclude <string | string[]>** (optional): exclude output-relative paths. Exclusions take priority over includes and per-file budgets.
+- **budgets <object[]>** (optional): ordered, independent per-file budgets. Each requires `include` and accepts `exclude`, `expect`, `warn`, `throw`, and `failOnError`.
+
+Numeric options must be finite, non-negative numbers. Invalid types and unknown
+options throw a configuration error immediately. Supplying a tolerance without
+`expect`, or `failOnError` without a failure threshold, emits an
+`INVALID_SIZE_BUDGET` warning at the start of each build.
+
+## Selecting files and budgets
+
+```js
+sizeCheck({
+  include: ['**/*.js', '**/*.css'],
+  exclude: ['**/*.map', '**/vendor-*.js'],
+  budgets: [
+    { include: '**/app-*.js', expect: 95, warn: 5, throw: 10 },
+    { include: '**/*.css', expect: 20, warn: 2, throw: 5 }
+  ]
+})
+```
+
+Patterns match emitted filenames such as `assets/app-abc123.js`, relative to the
+output directory. `*.js` matches the root; `**/*.js` also matches nested paths.
+Hidden files are included when they match. Use `exclude` for exclusions instead
+of a leading `!` in a pattern.
+
+Global filters apply first. The first matching budget applies to each selected
+file, without inheriting top-level limits. A budget's `exclude` only prevents
+that rule from matching; later rules can still apply. Unmatched files use the
+top-level `expect`, `warn`, `throw`, and `failOnError`, or simply report their size
+if no top-level budget is supplied. Empty or fully excluded bundles are valid.
+
+## Failing CI builds
 
 For CI builds:
 
 ```js
-sizeCheck({ expect: 95, warn: 5, failOnError: true })
+sizeCheck({ expect: 95, warn: 5, throw: 10 })
 ```
+
+This passes from 90–100 KiB, warns below 90 or above 100 KiB, and fails below
+85 or above 105 KiB. Differences exactly equal to a threshold do not exceed it:
+85 and 105 KiB still warn, but do not fail. Both thresholds compare exact bytes.
+
+To fail without a warning tier, use `sizeCheck({ expect: 95, throw: 5 })`.
+Omit both `warn` and `throw` to report differences without enforcing a tolerance.
 
 Budget violations use Rollup's warning/error handling with plugin code
 `FILESIZE_EXCEEDED`. Warnings can be captured with `onwarn` and are suppressed by
 Rollup's `--silent` flag. Build errors still fail the build.
+All failing files in an output bundle are collected into one error with a
+`fileNames` array. Passing files and warnings are still reported before that
+error is raised. Separate output configurations are checked separately.
+
+Checks run in a `generateBundle` hook with `order: 'post'`, after ordinary hooks.
+Place this plugin after other plugins with `post` hooks if they change file sizes.
+Changes made later in `writeBundle` are not measured.
+
+## Output
+
+```text
+  PASS  app.js       94.50 KiB  (-0.50 KiB)
+  PASS  vendor.js    96.00 KiB  (+1.00 KiB)
+```
+
+Filenames and sizes align across outputs. Positive differences mean larger than
+expected; negative differences mean smaller. Tiny differences use bytes so a
+one-byte change appears as `+1 B`, not `+0.00 KiB`.
+
+Colors describe the check result, not the direction of the change:
+
+- `SIZE`: neutral, when no tolerance is being checked.
+- `PASS`: green, within tolerance (including a small increase).
+- `WARN`: yellow, outside tolerance in either direction.
+- `FAIL`: red, outside the `throw` tolerance (or the `warn` tolerance with `failOnError: true` when `throw` is omitted).
+
+Both unusually small and unusually large bundles can indicate a broken build,
+so a decrease outside the configured tolerance still warns or fails. Redirected output
+has no plugin ANSI codes by default; status labels remain readable without color.
+
+## TypeScript
+
+Type declarations are included, with an exported options interface and a Rollup
+`Plugin` return type:
+
+```ts
+import sizeCheck, { type SizeCheckOptions } from 'rollup-plugin-filesize-check'
+
+const options: SizeCheckOptions = {
+  expect: 95,
+  warn: 5,
+  throw: 10,
+  color: 'auto'
+}
+
+export default {
+  input: 'src/index.js',
+  plugins: [sizeCheck(options)]
+}
+```
 
 ## See also
 

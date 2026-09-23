@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { rollup } from 'rollup'
 import test from 'tape-async'
 import sizeCheck from '../index.js'
@@ -10,10 +11,14 @@ const inspect = (options, output) => {
   const originalLog = console.log
   console.log = message => logs.push(message)
   try {
-    sizeCheck(options).generateBundle.call({
+    const plugin = sizeCheck(options)
+    const context = {
       warn: warning => warnings.push(warning),
       error: error => { throw Object.assign(new Error(error.message), error) }
-    }, {}, { [output.fileName]: output })
+    }
+    plugin.buildStart.call(context)
+    const outputs = Array.isArray(output) ? output : [output]
+    plugin.generateBundle.handler.call(context, {}, Object.fromEntries(outputs.map(item => [item.fileName, item])))
   } finally {
     console.log = originalLog
   }
@@ -101,4 +106,193 @@ test('optional failure mode rejects the Rollup build', async t => {
 
 test('failure mode permits sizes within tolerance', async t => {
   t.equal(inspect({ expect: 1, warn: 0, failOnError: true }, chunk(1024)).warnings.length, 0, 'matching output succeeds')
+})
+
+test('uses explicit status labels and consistent severity colors', async t => {
+  const report = inspect({ color: true }, chunk(1024)).logs[0]
+  t.match(report, /SIZE/, 'report-only output is labeled')
+  t.notOk(report.includes('\x1b['), 'report-only output stays neutral')
+  const pass = inspect({ expect: 1, warn: 1, color: true }, chunk(1536)).logs[0]
+  t.match(pass, /PASS.*\(\+0\.50 KiB\)/, 'an allowed increase passes')
+  t.ok(pass.startsWith('\x1b[32m'), 'pass is green')
+  for (const bytes of [0, 2048]) {
+    const warning = inspect({ expect: 1, warn: 0, color: true }, chunk(bytes)).warnings[0]
+    t.ok(warning.message.startsWith('\x1b[33m'), 'either direction outside tolerance is yellow')
+    t.match(warning.message, /WARN/, 'warning has a text label')
+  }
+  t.throws(() => inspect({ expect: 0, warn: 0, failOnError: true, color: true }, chunk(1)), /\x1b\[31m.*FAIL/, 'failure is red and labeled')
+  const plain = inspect({ expect: 1, warn: 0, color: false }, chunk(1024)).logs[0]
+  t.notOk(plain.includes('\x1b['), 'color false disables ANSI')
+  const warning = inspect({ expect: 0, warn: 0, color: false }, chunk(1)).warnings[0]
+  t.notOk(warning.message.includes('\x1b['), 'color false also applies to diagnostics')
+  t.match(warning.message, /\(\+1 B\)/, 'one-byte differences do not round to zero')
+})
+
+test('automatic colors respect terminal capabilities and NO_COLOR', async t => {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+  const oldNoColor = process.env.NO_COLOR
+  const oldTerm = process.env.TERM
+  const report = () => inspect({ expect: 1, warn: 0 }, chunk(1024)).logs[0]
+  try {
+    delete process.env.NO_COLOR
+    process.env.TERM = 'xterm'
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: false })
+    t.notOk(report().includes('\x1b['), 'redirected output has no ANSI')
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: true })
+    t.ok(report().includes('\x1b[32m'), 'interactive terminal gets green pass output')
+    process.env.NO_COLOR = ''
+    t.notOk(report().includes('\x1b['), 'NO_COLOR disables ANSI')
+    delete process.env.NO_COLOR
+    process.env.TERM = 'dumb'
+    t.notOk(report().includes('\x1b['), 'dumb terminals have no ANSI')
+  } finally {
+    if (descriptor) Object.defineProperty(process.stdout, 'isTTY', descriptor)
+    else delete process.stdout.isTTY
+    if (oldNoColor === undefined) delete process.env.NO_COLOR
+    else process.env.NO_COLOR = oldNoColor
+    if (oldTerm === undefined) delete process.env.TERM
+    else process.env.TERM = oldTerm
+  }
+})
+
+test('independent warning and failure tolerances check both directions', async t => {
+  const options = { expect: 2, warn: 0.5, throw: 1, color: false }
+  for (const bytes of [1536, 2048, 2560]) {
+    t.match(inspect(options, chunk(bytes)).logs[0], /PASS/, `${bytes} bytes passes including warning boundaries`)
+  }
+  for (const bytes of [1024, 1535, 2561, 3072]) {
+    const result = inspect(options, chunk(bytes))
+    t.equal(result.warnings.length, 1, `${bytes} bytes only warns including failure boundaries`)
+    t.match(result.warnings[0].message, /± 0\.5 KiB/, 'warning uses its own tolerance')
+  }
+  for (const bytes of [1023, 3073]) {
+    t.throws(() => inspect(options, chunk(bytes)), /FAIL.*± 1 KiB/, `${bytes} bytes fails with its own tolerance`)
+  }
+})
+
+test('throw works independently, including zero tolerance and expectation', async t => {
+  t.match(inspect({ expect: 0, throw: 0 }, chunk(0)).logs[0], /PASS/, 'empty output matches zero')
+  t.throws(() => inspect({ expect: 0, throw: 0 }, chunk(1)), /FAIL/, 'one byte violates zero tolerance')
+  for (const bytes of [1023, 1025]) {
+    t.throws(() => inspect({ expect: 1, throw: 0 }, chunk(bytes)), /FAIL/, 'zero tolerance fails in either direction')
+  }
+  const missing = inspect({ throw: 0 }, chunk(1))
+  t.match(missing.logs[0], /SIZE/, 'expectation is required to check a tolerance')
+  t.equal(missing.warnings[0].code, 'INVALID_SIZE_BUDGET', 'missing expectation produces a warning')
+  t.throws(() => inspect({ expect: 1, warn: 10, throw: 0 }, chunk(1025)), /FAIL/, 'failure does not depend on exceeding warn')
+  t.equal(inspect({ expect: 1, warn: 0, throw: 1, failOnError: true }, chunk(1025)).warnings.length, 1, 'explicit throw overrides failOnError')
+})
+
+test('throw rejects Rollup generation with a plugin error', async t => {
+  const warnings = []
+  const bundle = await build({ expect: 0, warn: 0, throw: 0, color: true }, warnings)
+  try {
+    try {
+      await bundle.generate({ format: 'es' })
+      t.fail('throw threshold should reject generation')
+    } catch (error) {
+      t.equal(error.code, 'PLUGIN_ERROR', 'uses a Rollup error')
+      t.equal(error.pluginCode, 'FILESIZE_EXCEEDED', 'identifies the budget violation')
+      t.match(error.message, /\x1b\[31m.*FAIL/, 'failure output is red')
+      t.equal(warnings.length, 0, 'failure takes priority without also warning')
+    }
+  } finally {
+    await bundle.close()
+  }
+})
+
+test('rejects invalid options before building', async t => {
+  for (const key of ['expect', 'warn', 'throw']) {
+    for (const value of [-1, NaN, Infinity, '1', null, Number.MAX_VALUE]) {
+      t.throws(() => sizeCheck({ [key]: value }), new RegExp(`options.${key}`), `${key} rejects ${value}`)
+    }
+  }
+  for (const options of [null, false, [], 'bad', { typo: 1 }, { failOnError: 1 }, { color: 'red' }, { include: 1 }, { exclude: [''] }, { budgets: {} }, { budgets: [null] }, { budgets: [{}] }, { budgets: [{ include: '*.js', throw: -1 }] }]) {
+    t.throws(() => sizeCheck(options), TypeError, 'invalid configuration is rejected')
+  }
+  const missing = inspect({ warn: 1, throw: 2 }, chunk(1))
+  t.equal(missing.warnings.length, 1, 'one configuration warning for missing expectation')
+  t.equal(missing.warnings[0].code, 'INVALID_SIZE_BUDGET', 'uses a distinct warning code')
+  t.match(inspect({ expect: 1, failOnError: true }, chunk(1)).warnings[0].message, /requires warn/, 'ineffective failure switch warns')
+  t.equal(inspect({ expect: 0, warn: 0, throw: 0 }, chunk(0)).warnings.length, 0, 'zero values remain valid')
+})
+
+const namedChunk = (fileName, bytes) => ({ ...chunk(bytes), fileName })
+
+test('filters output-relative globs and gives exclusions priority', async t => {
+  const outputs = [namedChunk('app.js', 0), namedChunk('nested/app.js', 1), namedChunk('.hidden.js', 0), namedChunk('app.js.map', 1), { type: 'asset', fileName: 'style.css', source: '' }]
+  const result = inspect({ expect: 0, throw: 0, include: '**/*.js', exclude: 'nested/**' }, outputs)
+  t.equal(result.logs.length, 2, 'includes root and hidden JS, excluding nested JS, maps, and CSS')
+  t.equal(inspect({ include: [] }, outputs).logs.length, 0, 'empty include selects nothing')
+  t.equal(inspect({ include: ['*.js', '*.css'], exclude: [] }, outputs).logs.length, 3, 'arrays select multiple output types')
+  t.equal(inspect({ exclude: '**/*' }, outputs).logs.length, 0, 'all-excluded output is valid')
+})
+
+test('per-file budgets are independent, first-match wins, and unmatched files use defaults', async t => {
+  const options = {
+    expect: 0, throw: 0,
+    budgets: [
+      { include: 'app.js', expect: 1, throw: 0 },
+      { include: '**/*.js', exclude: 'vendor.js', expect: 2, throw: 0 },
+      { include: '**/*.css', expect: 3, throw: 0 }
+    ]
+  }
+  const outputs = [namedChunk('app.js', 1024), namedChunk('nested/app.js', 2048), namedChunk('vendor.js', 0), { type: 'asset', fileName: 'style.css', source: 'x'.repeat(3072) }, namedChunk('other.txt', 0)]
+  t.equal(inspect(options, outputs).logs.length, 5, 'each output passes its selected budget')
+  t.match(inspect({ expect: 0, throw: 0, budgets: [{ include: '*.js' }] }, chunk(1024)).logs[0], /SIZE/, 'a report-only rule does not inherit global limits')
+  const missing = inspect({ budgets: [{ include: '*.js', throw: 0 }] }, chunk(1))
+  t.match(missing.warnings[0].message, /budgets\[0\].*expect/, 'incomplete rule warns with its index')
+})
+
+test('collects every failure and continues reporting other outputs', async t => {
+  const warnings = []
+  const logs = []
+  const errors = []
+  const plugin = sizeCheck({ color: false, expect: 1, throw: 0, budgets: [{ include: 'warn.js', expect: 0, warn: 0 }] })
+  const originalLog = console.log
+  console.log = message => logs.push(message)
+  try {
+    plugin.generateBundle.handler.call({
+      warn: warning => warnings.push(warning),
+      error: error => errors.push(error)
+    }, {}, Object.fromEntries([namedChunk('small.js', 0), namedChunk('pass.js', 1024), namedChunk('warn.js', 1), namedChunk('large.js', 2048)].map(output => [output.fileName, output])))
+  } finally {
+    console.log = originalLog
+  }
+  t.equal(errors.length, 1, 'emits one combined error')
+  t.deepEqual(errors[0].fileNames, ['small.js', 'large.js'], 'both failing files are identified')
+  t.match(errors[0].message, /small\.js/, 'reports undersized output')
+  t.match(errors[0].message, /large\.js/, 'reports oversized output')
+  t.equal(warnings.length, 1, 'still reports the warning')
+  t.match(logs[0], /PASS.*pass\.js/, 'still reports passing output')
+})
+
+test('post hook observes later ordinary hooks and warnings reach Rollup', async t => {
+  const warnings = []
+  const bundle = await rollup({
+    input: 'virtual-entry',
+    onwarn: warning => warnings.push(warning),
+    plugins: [sizeCheck({ expect: 0, throw: 0, include: '**/*.js', budgets: [{ include: '*.css', warn: 1 }] }), {
+      name: 'late-fixture',
+      resolveId: id => id,
+      load: () => 'export default 42',
+      generateBundle(_options, output) {
+        for (const file of Object.values(output)) if (file.type === 'chunk') file.code = ''
+        this.emitFile({ type: 'asset', fileName: 'extra.js', source: 'x' })
+        this.emitFile({ type: 'asset', fileName: 'second.js', source: 'xx' })
+      }
+    }]
+  })
+  try {
+    try {
+      await bundle.generate({ format: 'es' })
+      t.fail('late-emitted assets must fail')
+    } catch (error) {
+      t.deepEqual(error.fileNames, ['extra.js', 'second.js'], 'measures final chunk and sees both late assets')
+      t.equal(error.pluginCode, 'FILESIZE_EXCEEDED', 'uses combined Rollup diagnostic')
+    }
+    t.equal(warnings[0].pluginCode, 'INVALID_SIZE_BUDGET', 'configuration warning reaches onwarn')
+  } finally {
+    await bundle.close()
+  }
 })
