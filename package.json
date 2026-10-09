@@ -6,10 +6,11 @@
   "repository": "github:spencermountain/rollup-plugin-filesize-check",
   "author": "Spencer Kelly <spencermountain@gmail.com> (https://spencermountain.dev)",
   "type": "module",
+  "sideEffects": false,
   "main": "./index.js",
   "types": "./index.d.ts",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18"
   },
   "packageManager": "pnpm@9.12.0",
   "scripts": {
@@ -27,9 +28,9 @@
     "filesize"
   ],
   "devDependencies": {
-    "eslint": "10.11.0",
-    "rollup": "4.63.4",
-    "tap-dancer": "0.4.2",
+    "eslint": "10.12.0",
+    "rollup": "4.64.3",
+    "tap-dancer": "0.4.4",
     "tape": "5.10.2"
   },
   "peerDependencies": {
